@@ -310,7 +310,7 @@ func layout(g *gocui.Gui) error {
 		var mapCanvas MapCanvas
 		mapCanvas.Init(float64(maxX-1), float64(maxY-1))
 		mapCanvas.LoadCoordinates(CreateWorldMap())
-		fmt.Fprintf(view, mapCanvas.canvas.String())
+		fmt.Fprintf(view, mapCanvas.String())
 	}
 
 	return nil
