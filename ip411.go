@@ -147,6 +147,10 @@ func (mc *MapCanvas) Line(lonA, latA, lonB, latB float64) {
 	mc.canvas.DrawLine(xA, yA, xB, yB)
 }
 
+func (mc *MapCanvas) String() string {
+	return mc.canvas.String()
+}
+
 /*
 LoadCoordinates expects as a parameter a slice of slices (shapes).
 Each inner slice (shape) contains maps (coordinates). Each map has two
