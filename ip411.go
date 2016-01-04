@@ -303,14 +303,14 @@ func quit(g *gocui.Gui, v *gocui.View) error {
 func layout(g *gocui.Gui) error {
 	maxX, maxY := g.Size()
 
-	if v, err := g.SetView("main", -1, -1, maxX, maxY); err != nil {
+	if view, err := g.SetView("main", -1, -1, maxX, maxY); err != nil {
 		if err != gocui.ErrorUnkView {
 			return err
 		}
 		var mapCanvas MapCanvas
 		mapCanvas.Init(float64(maxX-1), float64(maxY-1))
 		mapCanvas.LoadCoordinates(CreateWorldMap())
-		fmt.Fprintf(v, mapCanvas.canvas.String())
+		fmt.Fprintf(view, mapCanvas.canvas.String())
 	}
 
 	return nil
