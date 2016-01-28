@@ -1,5 +1,5 @@
 build:
-	go build -o ip411.a
+	go build -o ip411
 
 clean:
-	rm *.a
+	rm ip411

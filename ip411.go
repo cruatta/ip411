@@ -11,9 +11,14 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/exrook/drawille-go"
 	"github.com/jroimartin/gocui"
+)
+
+var (
+	mu sync.Mutex // protects ctr
 )
 
 /*
@@ -28,7 +33,7 @@ func (res IPInfoResult) GetKey(key string) (string, error) {
 	if val, ok := res[key]; ok {
 		switch v := val.(type) {
 		default:
-			return "<nil>", fmt.Errorf("Value found in key '%s' of IPInfoResult with"+
+			return "", fmt.Errorf("Value found in key '%s' of IPInfoResult with"+
 				"unexpected type %s", key, v)
 		case bool:
 			return strconv.FormatBool(val.(bool)), nil
@@ -40,7 +45,7 @@ func (res IPInfoResult) GetKey(key string) (string, error) {
 			return val.(string), nil
 		}
 	}
-	return "<nil>", fmt.Errorf("Missing key '%s' in IPInfoResult", key)
+	return "", fmt.Errorf("Missing key '%s' in IPInfoResult", key)
 }
 
 /*
@@ -223,7 +228,7 @@ func CreateWorldMap() Coordinates {
 GetIPInfo - Get an IPInfoResult for an IP Address by GETting the ipinfo.io
 REST API result
 */
-func GetIPInfo(ip net.IP) (IPInfoResult, error) {
+func getIPInfo(ip net.IP) (IPInfoResult, error) {
 	url := fmt.Sprintf("http://ipinfo.io/%s/json", ip.String())
 
 	if ip.String() == "<nil>" {
@@ -253,9 +258,9 @@ func GetIPInfo(ip net.IP) (IPInfoResult, error) {
 }
 
 /*
-ParseArgs .
+parseArgs .
 */
-func ParseArgs() ([]string, error) {
+func parseArgs() ([]string, error) {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: %s [-h] [ip]\n", os.Args[0])
 		fmt.Fprintln(os.Stderr, "")
@@ -281,7 +286,7 @@ func ParseArgs() ([]string, error) {
 /*
 MakeIP .
 */
-func MakeIP(args []string) (net.IP, error) {
+func makeIP(args []string) (net.IP, error) {
 	var ip net.IP
 
 	if len(args) < 1 {
@@ -297,59 +302,124 @@ func MakeIP(args []string) (net.IP, error) {
 }
 
 func quit(g *gocui.Gui, v *gocui.View) error {
-	return gocui.Quit
+	return gocui.ErrQuit
 }
 
 func layout(g *gocui.Gui) error {
+
 	maxX, maxY := g.Size()
 
-	if view, err := g.SetView("main", -1, -1, maxX, maxY); err != nil {
-		if err != gocui.ErrorUnkView {
-			return err
-		}
-		var mapCanvas MapCanvas
-		mapCanvas.Init(float64(maxX-1), float64(maxY-1))
-		mapCanvas.LoadCoordinates(CreateWorldMap())
-		fmt.Fprintf(view, mapCanvas.String())
+	if _, err := g.SetView("info", -1, maxY-8, maxX, maxY); err != nil &&
+		err != gocui.ErrUnknownView {
+		return err
+	}
+
+	if _, err := g.SetView("map", -1, -1, maxX, maxY-8); err != nil &&
+		err != gocui.ErrUnknownView {
+		return err
 	}
 
 	return nil
 }
 
-func main() {
-	args, err := ParseArgs()
-	if err != nil {
-		os.Exit(1)
-	}
-	ip, err := MakeIP(args)
-	if err != nil {
-		log.Fatal(err)
-	}
-	_, err = GetIPInfo(ip)
-	if err != nil {
-		log.Fatal(err)
-	}
-	/*
-		lon, lat, err := resp.GetLonLat()
+func guiLoadMap(ipinfo IPInfoResult, gui *gocui.Gui) {
+	gui.Execute(func(g *gocui.Gui) error {
+
+		view, err := gui.View("map")
 		if err != nil {
 			log.Fatal(err)
 		}
-	*/
+		maxX, maxY := view.Size()
 
-	g := gocui.NewGui()
-	if err := g.Init(); err != nil {
+		var mapCanvas MapCanvas
+		mapCanvas.Init(float64(maxX), float64(maxY))
+		mapCanvas.LoadCoordinates(CreateWorldMap())
+
+		lon, lat, err := ipinfo.GetLonLat()
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		mapCanvas.PlotText(lon, lat, "X")
+
+		mu.Lock()
+		fmt.Fprintf(view, mapCanvas.String())
+		mu.Unlock()
+
+		return nil
+	})
+}
+
+func guiLoadInfo(ipinfo IPInfoResult, gui *gocui.Gui) {
+	gui.Execute(func(g *gocui.Gui) error {
+
+		view, err := gui.View("info")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		loc, err := ipinfo.GetKey("loc")
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		hostname, err := ipinfo.GetKey("hostname")
+		city, err := ipinfo.GetKey("city")
+		region, err := ipinfo.GetKey("region")
+		country, err := ipinfo.GetKey("country")
+		postal, err := ipinfo.GetKey("postal")
+		org, err := ipinfo.GetKey("org")
+
+		mu.Lock()
+		fmt.Fprintln(view, fmt.Sprintf("Hostname: %s", hostname))
+		fmt.Fprintln(view, fmt.Sprintf("Org: %s", org))
+		fmt.Fprintln(view, fmt.Sprintf("Longitude,Latitude: %s", loc))
+		fmt.Fprintln(view, fmt.Sprintf("City: %s", city))
+		fmt.Fprintln(view, fmt.Sprintf("Region: %s", region))
+		fmt.Fprintln(view, fmt.Sprintf("Country: %s", country))
+		fmt.Fprintln(view, fmt.Sprintf("Postal: %s", postal))
+		mu.Unlock()
+
+		return nil
+	})
+}
+
+func main() {
+
+	args, err := parseArgs()
+	if err != nil {
+		os.Exit(1)
+	}
+
+	ip, err := makeIP(args)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	ipinfo, err := getIPInfo(ip)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	gui := gocui.NewGui()
+
+	if err := gui.Init(); err != nil {
 		log.Panicln(err)
 	}
-	defer g.Close()
+	defer gui.Close()
 
-	g.SetLayout(layout)
+	gui.SetLayout(layout)
 
-	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
+	if err := gui.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
 		log.Panicln(err)
 	}
 
-	err = g.MainLoop()
-	if err != nil && err != gocui.Quit {
+	go guiLoadInfo(ipinfo, gui)
+	go guiLoadMap(ipinfo, gui)
+
+	err = gui.MainLoop()
+	if err != nil && err != gocui.ErrQuit {
 		log.Panicln(err)
 	}
+
 }
