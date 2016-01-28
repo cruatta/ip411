@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	mu sync.Mutex // protects ctr
+	mu sync.Mutex // protects gui
 )
 
 /*
