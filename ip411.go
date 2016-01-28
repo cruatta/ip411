@@ -13,7 +13,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/exrook/drawille-go"
+	"github.com/cruatta/drawille-go"
 	"github.com/jroimartin/gocui"
 )
 
