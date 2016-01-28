@@ -264,7 +264,7 @@ func parseArgs() ([]string, error) {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "usage: %s [-h] [ip]\n", os.Args[0])
 		fmt.Fprintln(os.Stderr, "")
-		fmt.Fprintf(os.Stderr, "Press <C+c> or <ESC> to quit\n")
+		fmt.Fprintf(os.Stderr, "Press <C+c> to quit\n")
 		fmt.Fprintln(os.Stderr, "")
 		fmt.Fprintln(os.Stderr, "Arguments:")
 		fmt.Fprint(os.Stderr, "  -h: Print this message\n")
